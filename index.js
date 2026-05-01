@@ -11,6 +11,7 @@ app.use(express.json());
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const DONATION_LOG_CHANNEL_ID = process.env.CHANNEL_ID;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+const PORT = process.env.PORT || 3000;
 // =============================================
 
 client.once("ready", () => {
