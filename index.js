@@ -8,7 +8,7 @@ app.use(express.json());
 // =============================================
 //   CONFIG — fill these in before running
 // =============================================
-const BOT_TOKEN = "YOUR_BOT_TOKEN_HERE";
+const BOT_TOKEN = "MTQ5OTc4NTg3NDEzNTg0Mjk3NQ.GNbVNX.RpdLDk6n3Dyh9zmF0ltHCSWmxKzIyXN5IZHOQA";
 const DONATION_LOG_CHANNEL_ID = "YOUR_CHANNEL_ID_HERE";
 const WEBHOOK_SECRET = "YOUR_SECRET_KEY_HERE"; // Must match Roblox script
 const PORT = 3000;
