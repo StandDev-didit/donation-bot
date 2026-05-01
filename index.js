@@ -6,16 +6,11 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const app = express();
 app.use(express.json());
 
-// =============================================
-//   CONFIG
-// =============================================
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const DONATION_LOG_CHANNEL_ID = process.env.CHANNEL_ID;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const PORT = process.env.PORT || 3000;
-// =============================================
 
-// Fetch real avatar image URL from Roblox API
 async function getRobloxAvatarUrl(userId) {
   try {
     const res = await fetch(
@@ -28,10 +23,9 @@ async function getRobloxAvatarUrl(userId) {
   }
 }
 
-// Generate merged donation image like Hazem's
 async function generateDonationImage(donorName, recipientName, amount, donorAvatarUrl, recipientAvatarUrl) {
-  const width = 800;
-  const height = 220;
+  const width = 700;
+  const height = 280;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
 
@@ -39,74 +33,58 @@ async function generateDonationImage(donorName, recipientName, amount, donorAvat
   ctx.fillStyle = "#2b2d31";
   ctx.fillRect(0, 0, width, height);
 
-  // Pink left border
-  ctx.fillStyle = "#CC00CC";
-  ctx.fillRect(0, 0, 6, height);
-
-  // Draw circular avatar helper
-  async function drawCircularAvatar(url, x, y, size) {
-    try {
-      const img = await loadImage(url);
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-      ctx.drawImage(img, x, y, size, size);
-      ctx.restore();
-
-      // Pink circle border
-      ctx.beginPath();
-      ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
-      ctx.strokeStyle = "#CC00CC";
-      ctx.lineWidth = 4;
-      ctx.stroke();
-    } catch {
-      // fallback circle if avatar fails
-      ctx.beginPath();
-      ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
-      ctx.fillStyle = "#555";
-      ctx.fill();
-      ctx.strokeStyle = "#CC00CC";
-      ctx.lineWidth = 4;
-      ctx.stroke();
+  // Draw circular avatar
+  async function drawCircularAvatar(url, cx, cy, size) {
+    if (url) {
+      try {
+        const img = await loadImage(url);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(img, cx - size / 2, cy - size / 2, size, size);
+        ctx.restore();
+      } catch {}
     }
+    // Pink border always
+    ctx.beginPath();
+    ctx.arc(cx, cy, size / 2 + 4, 0, Math.PI * 2);
+    ctx.strokeStyle = "#CC00CC";
+    ctx.lineWidth = 5;
+    ctx.stroke();
   }
 
-  const avatarSize = 120;
-  const avatarY = (height - avatarSize) / 2;
+  const avatarSize = 130;
+  const avatarY = 115;
+  const leftX = 115;
+  const rightX = width - 115;
 
-  // Draw donor avatar (left)
-  if (donorAvatarUrl) await drawCircularAvatar(donorAvatarUrl, 40, avatarY, avatarSize);
+  await drawCircularAvatar(donorAvatarUrl, leftX, avatarY, avatarSize);
+  await drawCircularAvatar(recipientAvatarUrl, rightX, avatarY, avatarSize);
 
-  // Draw recipient avatar (right)
-  if (recipientAvatarUrl) await drawCircularAvatar(recipientAvatarUrl, width - 40 - avatarSize, avatarY, avatarSize);
-
-  // Center text — Robux amount
+  // Robux amount — pink
   ctx.fillStyle = "#CC00CC";
   ctx.font = "bold 36px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText(`🔵 ${Number(amount).toLocaleString()}`, width / 2, height / 2 - 10);
+  ctx.fillText(`${Number(amount).toLocaleString()} Robux`, width / 2, avatarY - 15);
 
-  // Center text — "donated to"
+  // "donated to" — white
   ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 22px sans-serif";
-  ctx.fillText("donated to", width / 2, height / 2 + 25);
+  ctx.font = "bold 24px sans-serif";
+  ctx.fillText("donated to", width / 2, avatarY + 22);
 
-  // Donor name below left avatar
+  // Names below avatars
   ctx.fillStyle = "#cccccc";
-  ctx.font = "16px sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText(`@${donorName}`, 40 + avatarSize / 2, avatarY + avatarSize + 20);
-
-  // Recipient name below right avatar
-  ctx.fillText(`@${recipientName}`, width - 40 - avatarSize / 2, avatarY + avatarSize + 20);
+  ctx.font = "17px sans-serif";
+  ctx.fillText(`@${donorName}`, leftX, avatarY + avatarSize / 2 + 35);
+  ctx.fillText(`@${recipientName}`, rightX, avatarY + avatarSize / 2 + 35);
 
   return canvas.toBuffer("image/png");
 }
 
 client.once("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+  console.log(`Logged in as ${client.user.tag}`);
 });
 
 app.post("/donation", async (req, res) => {
@@ -120,17 +98,15 @@ app.post("/donation", async (req, res) => {
     const channel = await client.channels.fetch(DONATION_LOG_CHANNEL_ID);
     if (!channel) return res.status(404).json({ error: "Channel not found" });
 
-    // Fetch avatar URLs
     const donorAvatarUrl = await getRobloxAvatarUrl(donorId);
     const recipientAvatarUrl = await getRobloxAvatarUrl(recipientId);
 
-    // Generate merged image
     const imageBuffer = await generateDonationImage(donor, recipient, amount, donorAvatarUrl, recipientAvatarUrl);
     const attachment = new AttachmentBuilder(imageBuffer, { name: "donation.png" });
 
     const embed = new EmbedBuilder()
       .setColor(0xCC00CC)
-      .setDescription(`### 🚀 @${donor} donated 🔵 **${Number(amount).toLocaleString()} Robux** to @${recipient}`)
+      .setDescription(`### 🚀 @${donor} donated **${Number(amount).toLocaleString()} Robux** to @${recipient}`)
       .setImage("attachment://donation.png")
       .setFooter({ text: `Donated on • ${new Date().toLocaleString()}` });
 
@@ -143,7 +119,7 @@ app.post("/donation", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🌐 Express server listening on port ${PORT}`);
+  console.log(`Express server listening on port ${PORT}`);
 });
 
 client.login(BOT_TOKEN);
