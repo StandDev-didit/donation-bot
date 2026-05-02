@@ -1,7 +1,6 @@
 const { Client, GatewayIntentBits, EmbedBuilder, AttachmentBuilder } = require("discord.js");
 const express = require("express");
-const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
-const path = require("path");
+const { createCanvas, loadImage } = require("@napi-rs/canvas");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const app = express();
@@ -26,7 +25,7 @@ async function getRobloxAvatarUrl(userId) {
 
 async function generateDonationImage(donorName, recipientName, amount, donorAvatarUrl, recipientAvatarUrl) {
   const width = 700;
-  const height = 300;
+  const height = 320;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
 
@@ -34,62 +33,75 @@ async function generateDonationImage(donorName, recipientName, amount, donorAvat
   ctx.fillStyle = "#2b2d31";
   ctx.fillRect(0, 0, width, height);
 
-  // Draw circular avatar helper
-  async function drawCircularAvatar(url, cx, cy, size) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
-    ctx.closePath();
+  const avatarSize = 130;
+  const avatarCY = 140;
+  const leftCX = 120;
+  const rightCX = width - 120;
 
-    if (url) {
-      try {
-        const img = await loadImage(url);
-        ctx.clip();
-        ctx.drawImage(img, cx - size / 2, cy - size / 2, size, size);
-      } catch {
-        ctx.fillStyle = "#444";
-        ctx.fill();
-      }
-    } else {
-      ctx.fillStyle = "#444";
-      ctx.fill();
-    }
-    ctx.restore();
-
-    // Pink ring
-    ctx.beginPath();
-    ctx.arc(cx, cy, size / 2 + 5, 0, Math.PI * 2);
-    ctx.strokeStyle = "#CC00CC";
-    ctx.lineWidth = 6;
-    ctx.stroke();
+  // STEP 1 — Draw donor avatar (left)
+  if (donorAvatarUrl) {
+    try {
+      const img = await loadImage(donorAvatarUrl);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(leftCX, avatarCY, avatarSize / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, leftCX - avatarSize / 2, avatarCY - avatarSize / 2, avatarSize, avatarSize);
+      ctx.restore();
+    } catch {}
   }
+  // Pink ring donor
+  ctx.beginPath();
+  ctx.arc(leftCX, avatarCY, avatarSize / 2 + 5, 0, Math.PI * 2);
+  ctx.strokeStyle = "#CC00CC";
+  ctx.lineWidth = 6;
+  ctx.stroke();
 
-  const avatarSize = 140;
-  const avatarCY = 130;
-  const leftCX = 130;
-  const rightCX = width - 130;
+  // STEP 2 — Draw recipient avatar (right)
+  if (recipientAvatarUrl) {
+    try {
+      const img = await loadImage(recipientAvatarUrl);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(rightCX, avatarCY, avatarSize / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, rightCX - avatarSize / 2, avatarCY - avatarSize / 2, avatarSize, avatarSize);
+      ctx.restore();
+    } catch {}
+  }
+  // Pink ring recipient
+  ctx.beginPath();
+  ctx.arc(rightCX, avatarCY, avatarSize / 2 + 5, 0, Math.PI * 2);
+  ctx.strokeStyle = "#CC00CC";
+  ctx.lineWidth = 6;
+  ctx.stroke();
 
-  // Draw avatars
-  await drawCircularAvatar(donorAvatarUrl, leftCX, avatarCY, avatarSize);
-  await drawCircularAvatar(recipientAvatarUrl, rightCX, avatarCY, avatarSize);
-
-  // Center — Robux amount in pink
+  // STEP 3 — Draw text ON TOP of everything
+  // Robux amount — pink
+  ctx.save();
   ctx.fillStyle = "#DD00DD";
-  ctx.font = "bold 40px Arial";
+  ctx.font = "bold 38px Arial";
   ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(`${Number(amount).toLocaleString()} Robux`, width / 2, avatarCY - 18);
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(`${Number(amount).toLocaleString()} Robux`, width / 2, avatarCY - 10);
 
-  // Center — "donated to" in white
+  // "donated to" — white
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 26px Arial";
-  ctx.fillText("donated to", width / 2, avatarCY + 22);
+  ctx.fillText("donated to", width / 2, avatarCY + 30);
+  ctx.restore();
 
-  // Names below avatars
+  // Donor name below left avatar
+  ctx.save();
   ctx.fillStyle = "#cccccc";
   ctx.font = "18px Arial";
-  ctx.fillText(`@${donorName}`, leftCX, avatarCY + avatarSize / 2 + 30);
-  ctx.fillText(`@${recipientName}`, rightCX, avatarCY + avatarSize / 2 + 30);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(`@${donorName}`, leftCX, avatarCY + avatarSize / 2 + 35);
+
+  // Recipient name below right avatar
+  ctx.fillText(`@${recipientName}`, rightCX, avatarCY + avatarSize / 2 + 35);
+  ctx.restore();
 
   return canvas.toBuffer("image/png");
 }
