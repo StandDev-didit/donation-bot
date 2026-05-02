@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits, EmbedBuilder, AttachmentBuilder } = require("discord.js");
 const express = require("express");
-const { createCanvas, loadImage } = require("@napi-rs/canvas");
+const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
+const path = require("path");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const app = express();
@@ -25,60 +26,70 @@ async function getRobloxAvatarUrl(userId) {
 
 async function generateDonationImage(donorName, recipientName, amount, donorAvatarUrl, recipientAvatarUrl) {
   const width = 700;
-  const height = 280;
+  const height = 300;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
 
-  // Background
+  // Dark background
   ctx.fillStyle = "#2b2d31";
   ctx.fillRect(0, 0, width, height);
 
-  // Draw circular avatar
+  // Draw circular avatar helper
   async function drawCircularAvatar(url, cx, cy, size) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+    ctx.closePath();
+
     if (url) {
       try {
         const img = await loadImage(url);
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
-        ctx.closePath();
         ctx.clip();
         ctx.drawImage(img, cx - size / 2, cy - size / 2, size, size);
-        ctx.restore();
-      } catch {}
+      } catch {
+        ctx.fillStyle = "#444";
+        ctx.fill();
+      }
+    } else {
+      ctx.fillStyle = "#444";
+      ctx.fill();
     }
-    // Pink border always
+    ctx.restore();
+
+    // Pink ring
     ctx.beginPath();
-    ctx.arc(cx, cy, size / 2 + 4, 0, Math.PI * 2);
+    ctx.arc(cx, cy, size / 2 + 5, 0, Math.PI * 2);
     ctx.strokeStyle = "#CC00CC";
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 6;
     ctx.stroke();
   }
 
-  const avatarSize = 130;
-  const avatarY = 115;
-  const leftX = 115;
-  const rightX = width - 115;
+  const avatarSize = 140;
+  const avatarCY = 130;
+  const leftCX = 130;
+  const rightCX = width - 130;
 
-  await drawCircularAvatar(donorAvatarUrl, leftX, avatarY, avatarSize);
-  await drawCircularAvatar(recipientAvatarUrl, rightX, avatarY, avatarSize);
+  // Draw avatars
+  await drawCircularAvatar(donorAvatarUrl, leftCX, avatarCY, avatarSize);
+  await drawCircularAvatar(recipientAvatarUrl, rightCX, avatarCY, avatarSize);
 
-  // Robux amount — pink
-  ctx.fillStyle = "#CC00CC";
-  ctx.font = "bold 36px sans-serif";
+  // Center — Robux amount in pink
+  ctx.fillStyle = "#DD00DD";
+  ctx.font = "bold 40px Arial";
   ctx.textAlign = "center";
-  ctx.fillText(`${Number(amount).toLocaleString()} Robux`, width / 2, avatarY - 15);
+  ctx.textBaseline = "middle";
+  ctx.fillText(`${Number(amount).toLocaleString()} Robux`, width / 2, avatarCY - 18);
 
-  // "donated to" — white
+  // Center — "donated to" in white
   ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 24px sans-serif";
-  ctx.fillText("donated to", width / 2, avatarY + 22);
+  ctx.font = "bold 26px Arial";
+  ctx.fillText("donated to", width / 2, avatarCY + 22);
 
   // Names below avatars
   ctx.fillStyle = "#cccccc";
-  ctx.font = "17px sans-serif";
-  ctx.fillText(`@${donorName}`, leftX, avatarY + avatarSize / 2 + 35);
-  ctx.fillText(`@${recipientName}`, rightX, avatarY + avatarSize / 2 + 35);
+  ctx.font = "18px Arial";
+  ctx.fillText(`@${donorName}`, leftCX, avatarCY + avatarSize / 2 + 30);
+  ctx.fillText(`@${recipientName}`, rightCX, avatarCY + avatarSize / 2 + 30);
 
   return canvas.toBuffer("image/png");
 }
