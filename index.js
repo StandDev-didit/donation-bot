@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder, AttachmentBuilder } = require("discord.js");
+const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const express = require("express");
 
 const client = new Client({
@@ -16,7 +16,6 @@ const WELCOME_CHANNEL_ID = process.env.WELCOME_CHANNEL_ID;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const PORT = process.env.PORT || 3000;
 
-// Get Roblox avatar URL
 async function getRobloxAvatarUrl(userId) {
   try {
     const res = await fetch(
@@ -29,58 +28,28 @@ async function getRobloxAvatarUrl(userId) {
   }
 }
 
-// Build donation image URL using quickchart.io
-function buildDonationImageUrl(donorName, recipientName, amount, donorAvatar, recipientAvatar) {
-  const chart = {
-    type: "bar",
-    data: { labels: [""], datasets: [{ data: [0] }] },
-    options: {
-      plugins: {
-        beforeDraw: "function(chart) { const ctx = chart.ctx; const w = chart.width; const h = chart.height; ctx.fillStyle = '#2b2d31'; ctx.fillRect(0,0,w,h); }"
-      }
-    }
-  };
-
-  const donor = encodeURIComponent(donorAvatar || "");
-  const recip = encodeURIComponent(recipientAvatar || "");
-  const amt = encodeURIComponent(Number(amount).toLocaleString());
-  const dn = encodeURIComponent(donorName);
-  const rn = encodeURIComponent(recipientName);
-
-  return `https://quickchart.io/chart?width=700&height=300&backgroundColor=%232b2d31&c=${encodeURIComponent(JSON.stringify({
-    type: "outlabeledPie",
-    data: { labels: ["a"], datasets: [{ data: [1] }] }
-  }))}`;
-}
-
 client.once("ready", () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
 
-// Welcome new members
 client.on("guildMemberAdd", async (member) => {
   if (!WELCOME_CHANNEL_ID) return;
   try {
     const channel = await client.channels.fetch(WELCOME_CHANNEL_ID);
     if (!channel) return;
-
     const avatarUrl = member.user.displayAvatarURL({ extension: "png", size: 256 });
-
     const embed = new EmbedBuilder()
       .setColor(0x9900ff)
       .setAuthor({ name: member.user.username, iconURL: avatarUrl })
       .setThumbnail(avatarUrl)
       .setDescription(`## Welcome to Khaby's Studios!\nWe hope you have a great time here!`)
-      .setFooter({ text: `Member joined` })
       .setTimestamp();
-
     await channel.send({ content: `👋 <@${member.user.id}>`, embeds: [embed] });
   } catch (err) {
     console.error("Welcome error:", err);
   }
 });
 
-// Donation endpoint
 app.post("/donation", async (req, res) => {
   const { secret, donor, recipient, amount, donorId, recipientId } = req.body;
 
@@ -97,62 +66,65 @@ app.post("/donation", async (req, res) => {
     const formattedAmount = Number(amount).toLocaleString();
 
     // Build image using quickchart canvas API
-    const imageUrl = `https://quickchart.io/canvas?backgroundColor=%232b2d31&width=700&height=280&code=${encodeURIComponent(`
-      // Background
+    const canvasCode = `
       ctx.fillStyle = '#2b2d31';
       ctx.fillRect(0, 0, 700, 280);
 
-      // Load and draw donor avatar (left)
-      const img1 = new Image();
-      img1.onload = () => {
+      async function loadImg(url) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = url;
+        });
+      }
+
+      const img1 = await loadImg('${donorAvatar}');
+      if (img1) {
         ctx.save();
         ctx.beginPath();
-        ctx.arc(130, 130, 70, 0, Math.PI * 2);
+        ctx.arc(130, 120, 70, 0, Math.PI * 2);
         ctx.clip();
-        ctx.drawImage(img1, 60, 60, 140, 140);
+        ctx.drawImage(img1, 60, 50, 140, 140);
         ctx.restore();
-        ctx.beginPath();
-        ctx.arc(130, 130, 74, 0, Math.PI * 2);
-        ctx.strokeStyle = '#CC00CC';
-        ctx.lineWidth = 6;
-        ctx.stroke();
-        ctx.fillStyle = '#CC00CC';
-        ctx.lineWidth = 6;
-      };
-      img1.src = '${donorAvatar}';
+      }
+      ctx.beginPath();
+      ctx.arc(130, 120, 75, 0, Math.PI * 2);
+      ctx.strokeStyle = '#CC00CC';
+      ctx.lineWidth = 6;
+      ctx.stroke();
 
-      // Load and draw recipient avatar (right)
-      const img2 = new Image();
-      img2.onload = () => {
+      const img2 = await loadImg('${recipientAvatar}');
+      if (img2) {
         ctx.save();
         ctx.beginPath();
-        ctx.arc(570, 130, 70, 0, Math.PI * 2);
+        ctx.arc(570, 120, 70, 0, Math.PI * 2);
         ctx.clip();
-        ctx.drawImage(img2, 500, 60, 140, 140);
+        ctx.drawImage(img2, 500, 50, 140, 140);
         ctx.restore();
-        ctx.beginPath();
-        ctx.arc(570, 130, 74, 0, Math.PI * 2);
-        ctx.strokeStyle = '#CC00CC';
-        ctx.lineWidth = 6;
-        ctx.stroke();
-      };
-      img2.src = '${recipientAvatar}';
+      }
+      ctx.beginPath();
+      ctx.arc(570, 120, 75, 0, Math.PI * 2);
+      ctx.strokeStyle = '#CC00CC';
+      ctx.lineWidth = 6;
+      ctx.stroke();
 
-      // Center text
       ctx.fillStyle = '#CC00CC';
       ctx.font = 'bold 40px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('${formattedAmount} Robux', 350, 115);
+      ctx.fillText('${formattedAmount} Robux', 350, 105);
+
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 26px Arial';
-      ctx.fillText('donated to', 350, 155);
+      ctx.fillText('donated to', 350, 148);
 
-      // Names
       ctx.fillStyle = '#cccccc';
       ctx.font = '18px Arial';
-      ctx.fillText('@${donorName}', 130, 220);
-      ctx.fillText('@${recipientName}', 570, 220);
-    `)}`;
+      ctx.fillText('@${donor}', 130, 215);
+      ctx.fillText('@${recipient}', 570, 215);
+    `;
+
+    const imageUrl = `https://quickchart.io/canvas?width=700&height=280&code=${encodeURIComponent(canvasCode)}`;
 
     const embed = new EmbedBuilder()
       .setColor(0xCC00CC)
@@ -161,9 +133,10 @@ app.post("/donation", async (req, res) => {
       .setFooter({ text: `Donated on • ${new Date().toLocaleString()}` });
 
     await channel.send({ embeds: [embed] });
+    console.log(`Donation logged: ${donor} -> ${recipient} | ${formattedAmount} Robux`);
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error("Donation error:", err);
     res.status(500).json({ error: "Internal error" });
   }
 });
