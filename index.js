@@ -1,5 +1,8 @@
-const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
+const { Client, GatewayIntentBits, EmbedBuilder, AttachmentBuilder } = require("discord.js");
 const express = require("express");
+const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
+const path = require("path");
+const fs = require("fs");
 
 const client = new Client({
   intents: [
@@ -16,6 +19,17 @@ const WELCOME_CHANNEL_ID = process.env.WELCOME_CHANNEL_ID;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const PORT = process.env.PORT || 3000;
 
+// Load font from repo
+const FONT_PATH = path.join(__dirname, "font.ttf");
+let FONT = "Arial";
+if (fs.existsSync(FONT_PATH)) {
+  GlobalFonts.registerFromPath(FONT_PATH, "CustomFont");
+  FONT = "CustomFont";
+  console.log("✅ Font loaded from repo!");
+} else {
+  console.log("⚠️ font.ttf not found, using fallback");
+}
+
 async function getRobloxAvatarUrl(userId) {
   try {
     const res = await fetch(
@@ -28,8 +42,80 @@ async function getRobloxAvatarUrl(userId) {
   }
 }
 
+async function generateDonationImage(donorName, recipientName, amount, donorAvatarUrl, recipientAvatarUrl) {
+  const width = 700;
+  const height = 300;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+
+  // Background
+  ctx.fillStyle = "#2b2d31";
+  ctx.fillRect(0, 0, width, height);
+
+  const avatarSize = 130;
+  const avatarCY = 135;
+  const leftCX = 120;
+  const rightCX = width - 120;
+
+  // Draw donor avatar left
+  if (donorAvatarUrl) {
+    try {
+      const img = await loadImage(donorAvatarUrl);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(leftCX, avatarCY, avatarSize / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, leftCX - avatarSize / 2, avatarCY - avatarSize / 2, avatarSize, avatarSize);
+      ctx.restore();
+    } catch {}
+  }
+  ctx.beginPath();
+  ctx.arc(leftCX, avatarCY, avatarSize / 2 + 5, 0, Math.PI * 2);
+  ctx.strokeStyle = "#CC00CC";
+  ctx.lineWidth = 6;
+  ctx.stroke();
+
+  // Draw recipient avatar right
+  if (recipientAvatarUrl) {
+    try {
+      const img = await loadImage(recipientAvatarUrl);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(rightCX, avatarCY, avatarSize / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, rightCX - avatarSize / 2, avatarCY - avatarSize / 2, avatarSize, avatarSize);
+      ctx.restore();
+    } catch {}
+  }
+  ctx.beginPath();
+  ctx.arc(rightCX, avatarCY, avatarSize / 2 + 5, 0, Math.PI * 2);
+  ctx.strokeStyle = "#CC00CC";
+  ctx.lineWidth = 6;
+  ctx.stroke();
+
+  // Amount text - pink
+  ctx.fillStyle = "#CC00CC";
+  ctx.font = `bold 42px ${FONT}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(`${Number(amount).toLocaleString()} Robux`, width / 2, avatarCY - 12);
+
+  // "donated to" - white
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `bold 28px ${FONT}`;
+  ctx.fillText("donated to", width / 2, avatarCY + 30);
+
+  // Names below avatars
+  ctx.fillStyle = "#cccccc";
+  ctx.font = `18px ${FONT}`;
+  ctx.fillText(`@${donorName}`, leftCX, avatarCY + avatarSize / 2 + 35);
+  ctx.fillText(`@${recipientName}`, rightCX, avatarCY + avatarSize / 2 + 35);
+
+  return canvas.toBuffer("image/png");
+}
+
 client.once("ready", () => {
-  console.log(`Logged in as ${client.user.tag}`);
+  console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
 client.on("guildMemberAdd", async (member) => {
@@ -65,75 +151,17 @@ app.post("/donation", async (req, res) => {
     const recipientAvatar = await getRobloxAvatarUrl(recipientId);
     const formattedAmount = Number(amount).toLocaleString();
 
-    // Build image using quickchart canvas API
-    const canvasCode = `
-      ctx.fillStyle = '#2b2d31';
-      ctx.fillRect(0, 0, 700, 280);
-
-      async function loadImg(url) {
-        return new Promise((resolve) => {
-          const img = new Image();
-          img.onload = () => resolve(img);
-          img.onerror = () => resolve(null);
-          img.src = url;
-        });
-      }
-
-      const img1 = await loadImg('${donorAvatar}');
-      if (img1) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(130, 120, 70, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(img1, 60, 50, 140, 140);
-        ctx.restore();
-      }
-      ctx.beginPath();
-      ctx.arc(130, 120, 75, 0, Math.PI * 2);
-      ctx.strokeStyle = '#CC00CC';
-      ctx.lineWidth = 6;
-      ctx.stroke();
-
-      const img2 = await loadImg('${recipientAvatar}');
-      if (img2) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(570, 120, 70, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(img2, 500, 50, 140, 140);
-        ctx.restore();
-      }
-      ctx.beginPath();
-      ctx.arc(570, 120, 75, 0, Math.PI * 2);
-      ctx.strokeStyle = '#CC00CC';
-      ctx.lineWidth = 6;
-      ctx.stroke();
-
-      ctx.fillStyle = '#CC00CC';
-      ctx.font = 'bold 40px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('${formattedAmount} Robux', 350, 105);
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 26px Arial';
-      ctx.fillText('donated to', 350, 148);
-
-      ctx.fillStyle = '#cccccc';
-      ctx.font = '18px Arial';
-      ctx.fillText('@${donor}', 130, 215);
-      ctx.fillText('@${recipient}', 570, 215);
-    `;
-
-    const imageUrl = `https://quickchart.io/canvas?width=700&height=280&code=${encodeURIComponent(canvasCode)}`;
+    const imageBuffer = await generateDonationImage(donor, recipient, amount, donorAvatar, recipientAvatar);
+    const attachment = new AttachmentBuilder(imageBuffer, { name: "donation.png" });
 
     const embed = new EmbedBuilder()
       .setColor(0xCC00CC)
       .setDescription(`### 🚀 @${donor} donated **${formattedAmount} Robux** to @${recipient}`)
-      .setImage(imageUrl)
+      .setImage("attachment://donation.png")
       .setFooter({ text: `Donated on • ${new Date().toLocaleString()}` });
 
-    await channel.send({ embeds: [embed] });
-    console.log(`Donation logged: ${donor} -> ${recipient} | ${formattedAmount} Robux`);
+    await channel.send({ embeds: [embed], files: [attachment] });
+    console.log(`✅ Donation logged: ${donor} -> ${recipient} | ${formattedAmount} Robux`);
     res.json({ success: true });
   } catch (err) {
     console.error("Donation error:", err);
@@ -142,7 +170,7 @@ app.post("/donation", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Express listening on port ${PORT}`);
+  console.log(`✅ Express listening on port ${PORT}`);
 });
 
 client.login(BOT_TOKEN);
