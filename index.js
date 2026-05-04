@@ -19,23 +19,21 @@ const WELCOME_CHANNEL_ID = process.env.WELCOME_CHANNEL_ID;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const PORT = process.env.PORT || 3000;
 
-// Load font from repo
 const FONT_PATH = path.join(__dirname, "font.ttf");
 let FONT = "Arial";
 if (fs.existsSync(FONT_PATH)) {
   GlobalFonts.registerFromPath(FONT_PATH, "CustomFont");
   FONT = "CustomFont";
-  console.log("✅ Font loaded from repo!");
+  console.log("✅ Font loaded!");
 } else {
-  console.log("⚠️ font.ttf not found, using fallback");
+  console.log("⚠️ font.ttf not found");
 }
 
-// Donation tiers
 function getDonationTier(amount) {
-  if (amount >= 10000000) return { emoji: "🌟", name: "Starfall", color: "#ff0000", ringColor: "#ff0000", embedColor: 0xff0000 };
-  if (amount >= 1000000) return { emoji: "☄️", name: "Smite", color: "#ff00cc", ringColor: "#ff00cc", embedColor: 0xff00cc };
-  if (amount >= 100000) return { emoji: "💣", name: "Nuke", color: "#ffcc00", ringColor: "#ffcc00", embedColor: 0xffcc00 };
-  return { emoji: "🎈", name: "Blimp", color: "#0099ff", ringColor: "#0099ff", embedColor: 0x0099ff };
+  if (amount >= 10000000) return { emoji: "🌟", name: "Starfall", color: "#ff0000", embedColor: 0xff0000 };
+  if (amount >= 1000000)  return { emoji: "☄️",  name: "Smite",    color: "#ff00cc", embedColor: 0xff00cc };
+  if (amount >= 100000)   return { emoji: "💣",  name: "Nuke",     color: "#ffcc00", embedColor: 0xffcc00 };
+  return                         { emoji: "🎈",  name: "Blimp",    color: "#0099ff", embedColor: 0x0099ff };
 }
 
 async function getRobloxAvatarUrl(userId) {
@@ -57,14 +55,7 @@ async function generateDonationImage(donorName, recipientName, amount, donorAvat
   const ctx = canvas.getContext("2d");
 
   // Dark background
-  ctx.fillStyle = "#1e1f22";
-  ctx.fillRect(0, 0, width, height);
-
-  // Bottom gradient blur like the screenshot
-  const gradient = ctx.createLinearGradient(0, height - 100, 0, height);
-  gradient.addColorStop(0, "rgba(0,0,0,0)");
-  gradient.addColorStop(1, tier.color + "55");
-  ctx.fillStyle = gradient;
+  ctx.fillStyle = "#2b2d31";
   ctx.fillRect(0, 0, width, height);
 
   const avatarSize = 130;
@@ -72,7 +63,7 @@ async function generateDonationImage(donorName, recipientName, amount, donorAvat
   const leftCX = 120;
   const rightCX = width - 120;
 
-  // Draw donor avatar left
+  // Donor avatar
   if (donorAvatarUrl) {
     try {
       const img = await loadImage(donorAvatarUrl);
@@ -86,11 +77,11 @@ async function generateDonationImage(donorName, recipientName, amount, donorAvat
   }
   ctx.beginPath();
   ctx.arc(leftCX, avatarCY, avatarSize / 2 + 5, 0, Math.PI * 2);
-  ctx.strokeStyle = tier.ringColor;
+  ctx.strokeStyle = tier.color;
   ctx.lineWidth = 6;
   ctx.stroke();
 
-  // Draw recipient avatar right
+  // Recipient avatar
   if (recipientAvatarUrl) {
     try {
       const img = await loadImage(recipientAvatarUrl);
@@ -104,25 +95,57 @@ async function generateDonationImage(donorName, recipientName, amount, donorAvat
   }
   ctx.beginPath();
   ctx.arc(rightCX, avatarCY, avatarSize / 2 + 5, 0, Math.PI * 2);
-  ctx.strokeStyle = tier.ringColor;
+  ctx.strokeStyle = tier.color;
   ctx.lineWidth = 6;
   ctx.stroke();
 
-  // Amount text - tier color, big and bold
-  ctx.fillStyle = tier.color;
-  ctx.font = `bold 48px ${FONT}`;
+  // Draw Roblox Robux symbol + amount
+  const formattedAmount = Number(amount).toLocaleString();
+  
+  // Measure text width to position symbol + text together
+  ctx.font = `bold 52px ${FONT}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText(`${Number(amount).toLocaleString()} Robux`, width / 2, avatarCY - 10);
+  
+  const textWidth = ctx.measureText(formattedAmount).width;
+  const symbolSize = 38;
+  const gap = 10;
+  const totalWidth = symbolSize + gap + textWidth;
+  const startX = width / 2 - totalWidth / 2;
+  const centerY = avatarCY - 8;
+  
+  // Draw Roblox R symbol as a circle with R inside
+  const symCX = startX + symbolSize / 2;
+  const symCY = centerY - symbolSize / 2 + 5;
+  
+  // Outer circle
+  ctx.beginPath();
+  ctx.arc(symCX, symCY, symbolSize / 2, 0, Math.PI * 2);
+  ctx.fillStyle = tier.color;
+  ctx.fill();
+  
+  // White R letter inside
+  ctx.fillStyle = "#1e1f22";
+  ctx.font = `bold 26px ${FONT}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("R", symCX, symCY);
+  
+  // Amount text
+  ctx.fillStyle = tier.color;
+  ctx.font = `bold 52px ${FONT}`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(formattedAmount, startX + symbolSize + gap, centerY);
 
-  // "donated to" - white
+  // "donated to"
   ctx.fillStyle = "#ffffff";
-  ctx.font = `bold 28px ${FONT}`;
+  ctx.font = `bold 26px ${FONT}`;
   ctx.fillText("donated to", width / 2, avatarCY + 32);
 
-  // Names below avatars
-  ctx.fillStyle = "#cccccc";
-  ctx.font = `18px ${FONT}`;
+  // Names
+  ctx.fillStyle = "#aaaaaa";
+  ctx.font = `17px ${FONT}`;
   ctx.fillText(`@${donorName}`, leftCX, avatarCY + avatarSize / 2 + 35);
   ctx.fillText(`@${recipientName}`, rightCX, avatarCY + avatarSize / 2 + 35);
 
@@ -172,12 +195,12 @@ app.post("/donation", async (req, res) => {
 
     const embed = new EmbedBuilder()
       .setColor(tier.embedColor)
-      .setDescription(`### ${tier.emoji} @${donor} donated **${formattedAmount} Robux** to @${recipient}`)
+      .setDescription(`### ${tier.emoji} @${donor} donated \u24C7 **${formattedAmount} Robux** to @${recipient}`)
       .setImage("attachment://donation.png")
       .setFooter({ text: `Donated on • ${new Date().toLocaleString()}` });
 
     await channel.send({ embeds: [embed], files: [attachment] });
-    console.log(`✅ ${tier.name} donation: ${donor} -> ${recipient} | ${formattedAmount} Robux`);
+    console.log(`✅ ${tier.name}: ${donor} -> ${recipient} | ${formattedAmount} Robux`);
     res.json({ success: true });
   } catch (err) {
     console.error("Donation error:", err);
