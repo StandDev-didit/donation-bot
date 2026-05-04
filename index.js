@@ -30,6 +30,14 @@ if (fs.existsSync(FONT_PATH)) {
   console.log("⚠️ font.ttf not found, using fallback");
 }
 
+// Donation tiers
+function getDonationTier(amount) {
+  if (amount >= 10000000) return { emoji: "🌟", name: "Starfall", color: "#ff0000", ringColor: "#ff0000", embedColor: 0xff0000 };
+  if (amount >= 1000000) return { emoji: "☄️", name: "Smite", color: "#ff00cc", ringColor: "#ff00cc", embedColor: 0xff00cc };
+  if (amount >= 100000) return { emoji: "💣", name: "Nuke", color: "#ffcc00", ringColor: "#ffcc00", embedColor: 0xffcc00 };
+  return { emoji: "🎈", name: "Blimp", color: "#0099ff", ringColor: "#0099ff", embedColor: 0x0099ff };
+}
+
 async function getRobloxAvatarUrl(userId) {
   try {
     const res = await fetch(
@@ -42,14 +50,21 @@ async function getRobloxAvatarUrl(userId) {
   }
 }
 
-async function generateDonationImage(donorName, recipientName, amount, donorAvatarUrl, recipientAvatarUrl) {
+async function generateDonationImage(donorName, recipientName, amount, donorAvatarUrl, recipientAvatarUrl, tier) {
   const width = 700;
   const height = 300;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
 
-  // Background
-  ctx.fillStyle = "#2b2d31";
+  // Dark background
+  ctx.fillStyle = "#1e1f22";
+  ctx.fillRect(0, 0, width, height);
+
+  // Bottom gradient blur like the screenshot
+  const gradient = ctx.createLinearGradient(0, height - 100, 0, height);
+  gradient.addColorStop(0, "rgba(0,0,0,0)");
+  gradient.addColorStop(1, tier.color + "55");
+  ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
   const avatarSize = 130;
@@ -71,7 +86,7 @@ async function generateDonationImage(donorName, recipientName, amount, donorAvat
   }
   ctx.beginPath();
   ctx.arc(leftCX, avatarCY, avatarSize / 2 + 5, 0, Math.PI * 2);
-  ctx.strokeStyle = "#CC00CC";
+  ctx.strokeStyle = tier.ringColor;
   ctx.lineWidth = 6;
   ctx.stroke();
 
@@ -89,21 +104,21 @@ async function generateDonationImage(donorName, recipientName, amount, donorAvat
   }
   ctx.beginPath();
   ctx.arc(rightCX, avatarCY, avatarSize / 2 + 5, 0, Math.PI * 2);
-  ctx.strokeStyle = "#CC00CC";
+  ctx.strokeStyle = tier.ringColor;
   ctx.lineWidth = 6;
   ctx.stroke();
 
-  // Amount text - pink
-  ctx.fillStyle = "#CC00CC";
-  ctx.font = `bold 42px ${FONT}`;
+  // Amount text - tier color, big and bold
+  ctx.fillStyle = tier.color;
+  ctx.font = `bold 48px ${FONT}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText(`${Number(amount).toLocaleString()} Robux`, width / 2, avatarCY - 12);
+  ctx.fillText(`${Number(amount).toLocaleString()} Robux`, width / 2, avatarCY - 10);
 
   // "donated to" - white
   ctx.fillStyle = "#ffffff";
   ctx.font = `bold 28px ${FONT}`;
-  ctx.fillText("donated to", width / 2, avatarCY + 30);
+  ctx.fillText("donated to", width / 2, avatarCY + 32);
 
   // Names below avatars
   ctx.fillStyle = "#cccccc";
@@ -150,18 +165,19 @@ app.post("/donation", async (req, res) => {
     const donorAvatar = await getRobloxAvatarUrl(donorId);
     const recipientAvatar = await getRobloxAvatarUrl(recipientId);
     const formattedAmount = Number(amount).toLocaleString();
+    const tier = getDonationTier(Number(amount));
 
-    const imageBuffer = await generateDonationImage(donor, recipient, amount, donorAvatar, recipientAvatar);
+    const imageBuffer = await generateDonationImage(donor, recipient, amount, donorAvatar, recipientAvatar, tier);
     const attachment = new AttachmentBuilder(imageBuffer, { name: "donation.png" });
 
     const embed = new EmbedBuilder()
-      .setColor(0xCC00CC)
-      .setDescription(`### 🚀 @${donor} donated **${formattedAmount} Robux** to @${recipient}`)
+      .setColor(tier.embedColor)
+      .setDescription(`### ${tier.emoji} @${donor} donated **${formattedAmount} Robux** to @${recipient}`)
       .setImage("attachment://donation.png")
       .setFooter({ text: `Donated on • ${new Date().toLocaleString()}` });
 
     await channel.send({ embeds: [embed], files: [attachment] });
-    console.log(`✅ Donation logged: ${donor} -> ${recipient} | ${formattedAmount} Robux`);
+    console.log(`✅ ${tier.name} donation: ${donor} -> ${recipient} | ${formattedAmount} Robux`);
     res.json({ success: true });
   } catch (err) {
     console.error("Donation error:", err);
